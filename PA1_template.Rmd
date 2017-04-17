@@ -1,25 +1,82 @@
 ---
-title: "Reproducible Research: Peer Assessment 1"
-output: 
-  html_document:
-    keep_md: true
+title: "Course Project - Activity monitoring"
+author: "Yuri Nefedov"
+date: "17 04 2017"
+output: html_document
 ---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
 
-## Loading and preprocessing the data
+## Loading the data
 
+Reading cs-file and checking it.
 
+```{r loading, echo = TRUE}
+act <- read.csv("./activity.csv")
+dim(act)
+head(act)
+```
 
-## What is mean total number of steps taken per day?
+## Mean total number of steps taken per day
 
+Calculating steps by date with tapply().  
+Missing values ignored.
 
+```{r mean with NA, echo=TRUE}
+date_steps <- tapply(act$steps, act$date, sum)
+hist(date_steps, xlab="Steps",col="blue",border="red",main="Total number of steps taken each day (NA's not filled)")
+mean(date_steps, na.rm = TRUE)
+median(date_steps, na.rm = TRUE)
+```
 
-## What is the average daily activity pattern?
+## Average daily activity pattern
 
+Calculating steps by date with tapply(). 
+Missing values still ignored. Finding maximum.
 
+```{r average activity pattern, echo=TRUE}
+int_steps <- tapply(act$steps, act$interval, mean, na.rm = TRUE)
+plot(int_steps, type = "l", col = "red", xlab='Intervals',lwd=3, ylab='Average number of steps', main ='Average number of steps taken in 5-minute interval, averaged across all days')
+print(paste("Max is",max(int_steps),"at interval",names(int_steps)[which.max(int_steps)]))
+```
 
 ## Imputing missing values
+Filling strategy - use mean for the interval, calculated for it through all filled dates.
+They've been already calculated into variable int_steps.
+Calculated mean and median don't look shifted comparing with those above.
 
+```{r imputting NA, echo=TRUE}
+print(paste("Steps are NA in",sum(is.na(act$steps)),"intervals"))
+act_imputed <- act
+for (i in 1:nrow(act_imputed)) { 
+  if (is.na(act_imputed$steps[i]) == TRUE) {
+  st <- int_steps[as.character(act_imputed$interval[i])] 
+  act_imputed$steps[i] <- st         
+  }
+}
+date_steps_imp <- tapply(act_imputed$steps, act_imputed$date, sum)
+hist(date_steps_imp, xlab="Steps",col="grey",border="green",main="Total number of steps taken each day (NA's filled)")
+mean(date_steps_imp)
+median(date_steps_imp)
+```
 
+## Differences in activity patterns between weekdays and weekends
 
-## Are there differences in activity patterns between weekdays and weekends?
+Creating factor variable. Calculating step means for each interval differently for weekdays|ends. 
+
+```{r weekdays|weekends diffs, echo=TRUE}
+week_day_end <- function(act_date) {
+  wd <- weekdays(as.Date(act_date, "%Y-%m-%d"))
+  if ((wd == "Saturday" || wd =="Sunday")||(wd == "суббота" || wd =="воскресенье")) ## need for RUS                                                                                     ## location
+    x <- "Weekend" else x <- "Weekday"
+  x
+}
+act_imputed$day_type <- as.factor(sapply(act_imputed$date, week_day_end))  ## adding factor variable
+table(act_imputed$day_type)
+steps_per_day_impute <- aggregate(steps ~ interval+day_type, act_imputed, mean)
+library(ggplot2)
+plt <- ggplot(steps_per_day_impute, aes(interval, steps)) + geom_line(stat = "identity", aes(colour = day_type)) + theme_gray() + facet_grid(day_type ~ ., scales="fixed", space="fixed") + labs(x="Interval", y=expression("Quantity of Steps")) + ggtitle("Steps quantity per interval (by day type)")
+print(plt)
+```
